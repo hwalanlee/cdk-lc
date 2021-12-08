@@ -18,10 +18,10 @@ export class CdkLcStack extends cdk.Stack {
       vpc,
       description: 'lan-ami-test-security-group'
     });
-    securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'Allow SSH Access 22 from internet');
-    securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow SSH Access 80 from internet');
-    securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow SSH Access 443 from internet');
-    securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(8080), 'Allow SSH Access 8080 from internet');
+    // securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'Allow SSH Access 22 from internet');
+    // securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow SSH Access 80 from internet');
+    // securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow SSH Access 443 from internet');
+    // securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(8080), 'Allow SSH Access 8080 from internet');
 
     // ami id 가져오기  
     const newAMI = new ec2.LookupMachineImage({
@@ -106,34 +106,6 @@ export class CdkLcStack extends cdk.Stack {
     });
 
 
-
-
-
-
-
-
-
-
-    /* 기존 alb에 신규 타겟 그룹 생성해서 붙이기
-const existingListener = elbv2.ApplicationListener.fromLookup(this, 'lan-ami-test-existing-listener', {
-      loadBalancerTags: {
-        name: 'lan2-nodejenkins-alb'
-      }
-    })
-    const newTG = new elbv2.ApplicationTargetGroup(this, 'lan-ami-test-new-target-group', {
-      targetType: elbv2.TargetType.INSTANCE,
-      port: 8080,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      protocolVersion: elbv2.ApplicationProtocolVersion.HTTP1,
-      //targetGroupName: 'lan-alb-tg',
-      targets: [newASG]
-    });
-
-    existingListener.addTargetGroups('lan-ami-test-new-target-groups', {
-      targetGroups: [newTG]
-    });
-
-*/
 
     // asg, target group 삭제해야 함
 
