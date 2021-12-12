@@ -7,107 +7,59 @@ export class CdkLcStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    // cdk deploy 하기 전에!
+    // packer로 두 번째 ami 만들어두기
+
     // 기존 vpc 가져오기
-    const vpc = ec2.Vpc.fromLookup(this, 'lan-existing-vpc', {
+    const vpc = ec2.Vpc.fromLookup(this, 'lan-cicd-existing-vpc', {
       isDefault: false,
-      vpcId: 'vpc-013b9c65a8b7f708f'
+      vpcId: 'vpc-00d95ee34bb206fcd'
     });
 
-    // security group 만들기
-    const securityGroupForPublic = new ec2.SecurityGroup(this, 'lan-ami-test-security-group', {
-      vpc,
-      description: 'lan-ami-test-security-group'
-    });
-    // securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(22), 'Allow SSH Access 22 from internet');
-    // securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow SSH Access 80 from internet');
-    // securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow SSH Access 443 from internet');
-    // securityGroupForPublic.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(8080), 'Allow SSH Access 8080 from internet');
+    // asg 보안그룹 가져오기
+    const lanCicdExistingAsgSg = ec2.SecurityGroup.fromLookupByName(this, 'lan-cicd-existing-asg-sg', 'lan-cicd-asg-sg', vpc)
 
-    // ami id 가져오기  
-    const newAMI = new ec2.LookupMachineImage({
-      name: 'ami-test',
-    }).getImage(this).imageId;
+    // asg 두 번째 ami 가져오기  
+    const secondAmi = new ec2.LookupMachineImage({
+      name: 'lan-cicd-ami',
+    })
 
-    // lc 만들기
-    const newLc = new autoscaling.CfnLaunchConfiguration(this, 'lan-ami-test-new-lc', {
-      imageId: newAMI,
-      instanceType: 't2.micro',
-      // 밑에는 옵션
-      associatePublicIpAddress: false,
-      // blockDeviceMappings: [{
-      //   deviceName: 'deviceName',
-      // 
-      // the properties below are optional
-      //   ebs: {
-      //     deleteOnTermination: false,
-      //     encrypted: false,
-      //     iops: 123,
-      //     snapshotId: 'snapshotId',
-      //     throughput: 123,
-      //     volumeSize: 123,
-      //     volumeType: 'volumeType',
-      //   },
-      //   noDevice: false,
-      //   virtualName: 'virtualName',
-      // }],
-      // classicLinkVpcId: 'classicLinkVpcId',
-      // classicLinkVpcSecurityGroups: ['classicLinkVpcSecurityGroups'],
-      // ebsOptimized: false,
-      // iamInstanceProfile: 'iamInstanceProfile',
-      // instanceId: 'instanceId',
-      instanceMonitoring: true, // default - false
-      // kernelId: 'kernelId',
-      keyName: 'lanKeyPair',
-      launchConfigurationName: 'lan-ami-test-new-lc',
-      // metadataOptions: {
-      //   httpEndpoint: 'httpEndpoint',
-      //   httpPutResponseHopLimit: 123,
-      //   httpTokens: 'httpTokens',
-      // },
-      // placementTenancy: 'placementTenancy',
-      // ramDiskId: 'ramDiskId',
-      // securityGroups: ['security-group-for-public'],  // securityGroupForNodejenkinsPublic
-      // spotPrice: 'spotPrice',
-      // userData: 'userData',
-    });
-
-    const newASG = new autoscaling.AutoScalingGroup(this, 'lan-ami-test-new-asg', {
+    // lc 필요 없음. asg 옵션에 넣어서 만들면 됨
+    const secondASG = new autoscaling.AutoScalingGroup(this, 'lan-cicd-second-asg', {
       vpc,
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.MICRO),
-      machineImage: new ec2.AmazonLinuxImage(),
-      securityGroup: securityGroupForPublic,
-      autoScalingGroupName: 'lan-ami-test-new-asg',
+      machineImage: secondAmi,
+      securityGroup: lanCicdExistingAsgSg,
+      autoScalingGroupName: 'lan-cicd-second-asg',
       desiredCapacity: 1,
-      groupMetrics: [autoscaling.GroupMetrics.all()],
-      keyName: 'lanKeyPair',
       maxCapacity: 3,
-      minCapacity: 1
+      minCapacity: 1,
+      groupMetrics: [autoscaling.GroupMetrics.all()],
+      keyName: 'lanKeyPair'
     });
-    newASG.scaleOnCpuUtilization('KeepSpareCPU', {
+    secondASG.scaleOnCpuUtilization('KeepSpareCPU', {
       targetUtilizationPercent: 50
     });
 
     // 기존 alb의 리스너에 신규 asg 붙이고 기존 asg 삭제하기
-    const existingAlb = elbv2.ApplicationLoadBalancer.fromLookup(this, 'lan-ami-test-existing-alb', {
+    const existingAlb = elbv2.ApplicationLoadBalancer.fromLookup(this, 'lan-cicd-existing-alb', {
       loadBalancerTags: {
-        name: 'lan2-nodejenkins-alb'  // 태그 추가해줘야 함
-      }
-    });
-    const albListener = existingAlb.addListener('lan-ami-test-new-listener', {
+        name: 'lan-cicd-alb'  // 기존 infra에서 tag 'name' 추가해주지 않으면 작동 안 함. 왜?
+      }      
+    }); 
+    const secondListener = existingAlb.addListener('lan-cicd-second-listener', {
       port: 8080, // 여기 바뀜
       open: true,
     });    
-    albListener.addTargets('lan-ami-test-new-target-group', {  // addTargetGroups(), addAction()
+    secondListener.addTargets('lan-ami-test-new-target-group', {  
       port: 8080,
       protocol: elbv2.ApplicationProtocol.HTTP,
       protocolVersion: elbv2.ApplicationProtocolVersion.HTTP1,
-      //targetGroupName: 'lan-alb-tg',
-      targets: [newASG]
+      targetGroupName: 'lan-alb-second-tg',   // tag 텝에서 Name으로 적용됐는지 확인해야 !!!!
+      targets: [secondASG]
     });
 
 
-
-    // asg, target group 삭제해야 함
 
 
   }
